@@ -1,4 +1,4 @@
-# htmx_four_actix
+# `htmx_four_actix`
 
 Actix Web support for [htmx 4.0.0](https://github.com/bigskysoftware/htmx/tree/v4.0.0). Handlers read [`HX-Request`](https://four.htmx.org/reference/headers/HX-Request) and [`HX-Request-Type`](https://four.htmx.org/reference/headers/HX-Request-Type). Responses write [`HX-Trigger`](https://four.htmx.org/reference/headers/HX-Trigger), [`HX-Reswap`](https://four.htmx.org/reference/headers/HX-Reswap), and `Vary` in the form htmx 4 and Actix consume.
 
@@ -6,7 +6,7 @@ Header names and [`SwapStyle`](https://four.htmx.org/reference/attributes/hx-swa
 
 ```toml
 [dependencies]
-htmx_four_actix = "0.1.0"
+htmx_four_actix = "0.1.1"
 ```
 
 ## Example

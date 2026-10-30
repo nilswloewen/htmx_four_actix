@@ -14,6 +14,7 @@ pub struct HxTriggerError {
 
 impl HxTriggerError {
     /// Which part of the write failed.
+    #[must_use]
     pub fn kind(self) -> HxTriggerErrorKind {
         self.kind
     }

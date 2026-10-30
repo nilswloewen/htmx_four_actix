@@ -71,6 +71,7 @@ impl HxRequest {
     /// `HX-Request` matches by presence. htmx 4.0.0 sends `true`, and any other
     /// value still counts. `partial` and `full` are ASCII case-insensitive.
     /// Surrounding whitespace is not stripped.
+    #[must_use]
     pub fn from_headers(headers: &HeaderMap) -> Self {
         if !headers.contains_key(&HX_REQUEST) {
             return Self::Browser;
@@ -88,11 +89,13 @@ impl HxRequest {
     }
 
     /// [`HX-Request`](https://four.htmx.org/reference/headers/HX-Request) is present.
+    #[must_use]
     pub fn is_htmx(self) -> bool {
         matches!(self, Self::Htmx(_))
     }
 
     /// The [`HX-Request-Type`](https://four.htmx.org/reference/headers/HX-Request-Type), when this is an htmx request.
+    #[must_use]
     pub fn request_type(self) -> Option<HxRequestType> {
         match self {
             Self::Browser => None,
@@ -104,6 +107,7 @@ impl HxRequest {
     ///
     /// True when this is an htmx request and the type is not [`HxRequestType::Full`].
     /// A browser navigation and `HX-Request-Type: full` are both false: both want the whole page.
+    #[must_use]
     pub fn expects_fragment(self) -> bool {
         self.is_htmx() && self.request_type() != Some(HxRequestType::Full)
     }
