@@ -1,0 +1,22 @@
+[package]
+name = "htmx_four_actix"
+version = "0.1.0"
+edition = "2024"
+description = "Actix Web extractors and response headers for htmx 4."
+license = "0BSD"
+repository = "https://github.com/nilswloewen/htmx_four_actix"
+keywords = ["htmx", "actix", "actix-web", "hypermedia", "http"]
+categories = ["web-programming::http-server"]
+rust-version = "1.88"
+readme = "README.md"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+# Header maps, responses, and `FromRequest` are in the default-free core.
+# An application enables the actix-web features it uses. This crate does not turn them on.
+actix-web = { version = "4.17", default-features = false }
+# Header names are `&str`. This crate builds `HeaderName` with the type Actix re-exports.
+htmx_four = { path = "../htmx_four", version = "0.1.3" }
+serde_json = "1"
