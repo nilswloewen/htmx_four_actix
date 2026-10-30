@@ -13,6 +13,10 @@ readme = "README.md"
 [lib]
 path = "src/lib.rs"
 
+[features]
+# Header names htmx 4 dropped, from htmx_four. Off by default.
+htmx-2-compat = ["htmx_four/htmx-2-compat"]
+
 [lints.clippy]
 pedantic = { level = "deny", priority = -1 }
 

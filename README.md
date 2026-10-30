@@ -9,6 +9,14 @@ Header names and [`SwapStyle`](https://four.htmx.org/reference/attributes/hx-swa
 htmx_four_actix = "0.1.1"
 ```
 
+This crate follows `htmx_four`: htmx 4 and newer only. The `htmx-2-compat` feature turns on the same feature there, which exports the header names htmx 4 dropped.
+
+```toml
+htmx_four_actix = { version = "0.1.1", features = ["htmx-2-compat"] }
+```
+
+`HxRequest` still reads [`HX-Request`](https://four.htmx.org/reference/headers/HX-Request) and [`HX-Request-Type`](https://four.htmx.org/reference/headers/HX-Request-Type). An htmx 2 request sends `HX-Request` and no `HX-Request-Type`, so it is `Htmx(Absent)` and `expects_fragment` is true. The feature does not also write `HX-Trigger-After-Swap` or `HX-Trigger-After-Settle`. htmx 2 would fire `HX-Trigger` and those headers as separate events.
+
 ## Example
 
 A partial htmx request gets a fragment. A browser navigation and `HX-Request-Type: full` both get the whole page.
