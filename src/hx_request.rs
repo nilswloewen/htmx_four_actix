@@ -1,6 +1,7 @@
 use actix_web::dev::Payload;
 use actix_web::http::header::{HeaderMap, HeaderName};
 use actix_web::{FromRequest, HttpRequest};
+use htmx_four::HxRequestInfo;
 use std::convert::Infallible;
 use std::future::{Ready, ready};
 
@@ -101,6 +102,19 @@ impl HxRequest {
             Self::Browser => None,
             Self::Htmx(request_type) => Some(request_type),
         }
+    }
+
+    /// [`HX-Boosted`](https://four.htmx.org/reference/headers/HX-Boosted),
+    /// [`HX-Current-URL`](https://four.htmx.org/reference/headers/HX-Current-URL),
+    /// [`HX-History-Restore-Request`](https://four.htmx.org/reference/headers/HX-History-Restore-Request),
+    /// [`HX-Source`](https://four.htmx.org/reference/headers/HX-Source), and
+    /// [`HX-Target`](https://four.htmx.org/reference/headers/HX-Target).
+    ///
+    /// A flag is true when that header is present and UTF-8. A non-UTF-8 value does not count.
+    /// This does not change [`from_headers`](Self::from_headers).
+    #[must_use]
+    pub fn info(headers: &HeaderMap) -> HxRequestInfo<'_> {
+        HxRequestInfo::lookup(|name| headers.get(name).and_then(|value| value.to_str().ok()))
     }
 
     /// The handler should return a fragment.

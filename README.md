@@ -1,18 +1,18 @@
 # `htmx_four_actix`
 
-Actix Web support for [htmx 4.0.0](https://github.com/bigskysoftware/htmx/tree/v4.0.0). Handlers read [`HX-Request`](https://four.htmx.org/reference/headers/HX-Request) and [`HX-Request-Type`](https://four.htmx.org/reference/headers/HX-Request-Type). Responses write [`HX-Trigger`](https://four.htmx.org/reference/headers/HX-Trigger), [`HX-Reswap`](https://four.htmx.org/reference/headers/HX-Reswap), and `Vary` in the form htmx 4 and Actix consume.
+Actix Web support for [htmx 4.0.0](https://github.com/bigskysoftware/htmx/tree/v4.0.0). Handlers read [`HX-Request`](https://four.htmx.org/reference/headers/HX-Request), [`HX-Request-Type`](https://four.htmx.org/reference/headers/HX-Request-Type), and the other htmx request headers. Responses write the [htmx 4 response headers](https://four.htmx.org/reference/headers) and `Vary` in the form htmx 4 and Actix consume.
 
 Header names and [`SwapStyle`](https://four.htmx.org/reference/attributes/hx-swap) come from [`htmx_four`](https://docs.rs/htmx_four). The names are `&str`. This crate turns them into [`actix_web::http::header::HeaderName`](https://docs.rs/actix-web/4/actix_web/http/header/struct.HeaderName.html), the `http` 0.2 type Actix Web 4 re-exports. A handler passes the `&str` straight through, as in `.insert_header((HX_REDIRECT, path))`. Where an API needs an owned `HeaderName`, use `HeaderName::from_static` on that string.
 
 ```toml
 [dependencies]
-htmx_four_actix = "0.1.1"
+htmx_four_actix = "0.1.2"
 ```
 
 This crate follows `htmx_four`: htmx 4 and newer only. The `htmx-2-compat` feature turns on the same feature there, which exports the header names htmx 4 dropped.
 
 ```toml
-htmx_four_actix = { version = "0.1.1", features = ["htmx-2-compat"] }
+htmx_four_actix = { version = "0.1.2", features = ["htmx-2-compat"] }
 ```
 
 `HxRequest` still reads [`HX-Request`](https://four.htmx.org/reference/headers/HX-Request) and [`HX-Request-Type`](https://four.htmx.org/reference/headers/HX-Request-Type). An htmx 2 request sends `HX-Request` and no `HX-Request-Type`, so it is `Htmx(Absent)` and `expects_fragment` is true. The feature does not also write `HX-Trigger-After-Swap` or `HX-Trigger-After-Settle`. htmx 2 would fire `HX-Trigger` and those headers as separate events.
@@ -75,7 +75,57 @@ fn main() -> Result<(), htmx_four_actix::WithHxTriggerError> {
 
 htmx 4.0.0 treats a value that starts with `{` as JSON and any other value as a comma-separated name list. The Fetch API joins duplicate header lines with a comma before htmx sees them, so a second `HX-Trigger` line breaks a JSON value. This function writes one line. A name list gains `, event`. A JSON object gains `"event": true`. A name or key that is already present is left in place.
 
+`append_hx_trigger_detail` attaches a JSON detail. One detail makes the whole header a JSON object. A string detail stays a string. An existing name keeps its first detail.
+
+```rust
+use actix_web::http::header::HeaderMap;
+use htmx_four::response_headers::HX_TRIGGER;
+use htmx_four_actix::append_hx_trigger_detail;
+use serde_json::json;
+
+fn main() -> Result<(), htmx_four_actix::HxTriggerError> {
+    let mut headers = HeaderMap::new();
+    append_hx_trigger_detail(&mut headers, "notification", &json!("Saved"))?;
+    let trigger = headers.get(HX_TRIGGER).and_then(|value| value.to_str().ok());
+    assert_eq!(trigger, Some(r#"{"notification":"Saved"}"#));
+    Ok(())
+}
+```
+
 An event name is one header token: non-empty, no comma, no surrounding whitespace, and it does not start with `{`.
+
+## Other response headers
+
+`HxLocation` and `HxUrlHistory` live in `htmx_four`. These functions write one header and replace any earlier value of that name. A failed write leaves the map unchanged.
+
+`set_hx_location` writes [`HX-Location`](https://four.htmx.org/reference/headers/HX-Location): a path, or that path plus [`htmx.ajax()`](https://four.htmx.org/reference/methods/htmx-ajax#options) options. `set_hx_redirect` writes [`HX-Redirect`](https://four.htmx.org/reference/headers/HX-Redirect). `set_hx_push_url` and `set_hx_replace_url` write [`HX-Push-Url`](https://four.htmx.org/reference/headers/HX-Push-Url) and [`HX-Replace-Url`](https://four.htmx.org/reference/headers/HX-Replace-Url). `HxUrlHistory::Skip` is `false`. `HxUrlHistory::Url` is that URL, and the text `true` on `HX-Replace-Url` uses the response path. `set_hx_refresh` writes [`HX-Refresh: true`](https://four.htmx.org/reference/headers/HX-Refresh). `set_hx_reswap` writes a [`SwapStyle`](https://four.htmx.org/reference/attributes/hx-swap) name. A swap string with modifiers, such as `innerHTML transition:true`, is set through `HX_RESWAP` directly. `set_hx_retarget` and `set_hx_reselect` write [`HX-Retarget`](https://four.htmx.org/reference/headers/HX-Retarget) and [`HX-Reselect`](https://four.htmx.org/reference/headers/HX-Reselect).
+
+```rust
+use actix_web::HttpResponse;
+use htmx_four::response_headers::{HX_LOCATION, HX_PUSH_URL};
+use htmx_four::{HxLocation, HxUrlHistory};
+use htmx_four_actix::{set_hx_location, set_hx_push_url};
+
+fn main() -> Result<(), htmx_four_actix::HxHeaderError> {
+    let mut response = HttpResponse::Ok().finish();
+    let location = HxLocation::builder().path("/orders").build();
+    set_hx_location(response.headers_mut(), &location)?;
+    set_hx_push_url(response.headers_mut(), &HxUrlHistory::Skip)?;
+    assert_eq!(
+        response.headers().get(HX_LOCATION).and_then(|value| value.to_str().ok()),
+        Some("/orders")
+    );
+    assert_eq!(
+        response.headers().get(HX_PUSH_URL).and_then(|value| value.to_str().ok()),
+        Some("false")
+    );
+    Ok(())
+}
+```
+
+## Request info
+
+`HxRequest::info` reads [`HX-Boosted`](https://four.htmx.org/reference/headers/HX-Boosted), [`HX-Current-URL`](https://four.htmx.org/reference/headers/HX-Current-URL), [`HX-History-Restore-Request`](https://four.htmx.org/reference/headers/HX-History-Restore-Request), [`HX-Source`](https://four.htmx.org/reference/headers/HX-Source), and [`HX-Target`](https://four.htmx.org/reference/headers/HX-Target) into `htmx_four::HxRequestInfo`. A flag is true when the header is present. `HX-Source` and `HX-Target` are `tagName#id`.
 
 ## Vary
 
@@ -90,8 +140,21 @@ actix-cors reads the first `Vary` value and replaces the header with that value 
 - [`HX-Request`](https://four.htmx.org/reference/headers/HX-Request)
 - [`HX-Request-Type`](https://four.htmx.org/reference/headers/HX-Request-Type)
 - [`HX-Trigger`](https://four.htmx.org/reference/headers/HX-Trigger)
+- [`HX-Location`](https://four.htmx.org/reference/headers/HX-Location)
+- [`HX-Redirect`](https://four.htmx.org/reference/headers/HX-Redirect)
+- [`HX-Push-Url`](https://four.htmx.org/reference/headers/HX-Push-Url)
+- [`HX-Replace-Url`](https://four.htmx.org/reference/headers/HX-Replace-Url)
+- [`HX-Refresh`](https://four.htmx.org/reference/headers/HX-Refresh)
 - [`HX-Reswap`](https://four.htmx.org/reference/headers/HX-Reswap)
+- [`HX-Retarget`](https://four.htmx.org/reference/headers/HX-Retarget)
+- [`HX-Reselect`](https://four.htmx.org/reference/headers/HX-Reselect)
 - [`hx-swap`](https://four.htmx.org/reference/attributes/hx-swap)
+
+## Other Rust crates
+
+[`actix-htmx`](https://crates.io/crates/actix-htmx) is the other Actix Web crate. It is htmx 2 middleware and writes `HX-Trigger-After-Swap` and `HX-Trigger-After-Settle`. [`axum-htmx`](https://crates.io/crates/axum-htmx) and [`htmxtools`](https://crates.io/crates/htmxtools) cover that htmx 2 header set for Axum and for the `http` crate. [`htmxology`](https://crates.io/crates/htmxology) is an Axum server-side rendering stack.
+
+This crate reads htmx 4 [`HX-Request-Type`](https://four.htmx.org/reference/headers/HX-Request-Type). Header names and values come from [`htmx_four`](https://docs.rs/htmx_four).
 
 Built by htmx CEO [nilswloewen](https://htmx.ceo/) and his trusty clanka's.
 

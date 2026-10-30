@@ -1,6 +1,10 @@
 use actix_web::FromRequest;
+use actix_web::http::header::{HeaderMap, HeaderName, HeaderValue};
 use actix_web::test::TestRequest;
-use htmx_four::request_headers::{HX_REQUEST, HX_REQUEST_TYPE};
+use htmx_four::request_headers::{
+    HX_BOOSTED, HX_CURRENT_URL, HX_HISTORY_RESTORE_REQUEST, HX_REQUEST, HX_REQUEST_TYPE, HX_SOURCE,
+    HX_TARGET,
+};
 use htmx_four_actix::{HxRequest, HxRequestType};
 
 #[test]
@@ -97,4 +101,45 @@ fn extractor_matches_from_headers() {
     let extracted = HxRequest::extract(&request).into_inner().unwrap();
     assert_eq!(extracted, HxRequest::from_headers(request.headers()));
     assert!(extracted.expects_fragment());
+}
+
+#[test]
+fn info_reads_the_other_request_headers() {
+    let request = TestRequest::default()
+        .insert_header((HX_REQUEST, "true"))
+        .insert_header((HX_REQUEST_TYPE, "partial"))
+        .insert_header((HX_BOOSTED, "true"))
+        .insert_header((HX_CURRENT_URL, "https://example.test/orders"))
+        .insert_header((HX_SOURCE, "button#save"))
+        .insert_header((HX_TARGET, "div#results"))
+        .to_http_request();
+
+    let info = HxRequest::info(request.headers());
+    assert!(info.boosted);
+    assert!(!info.history_restore_request);
+    assert_eq!(info.current_url, Some("https://example.test/orders"));
+    assert_eq!(info.source, Some("button#save"));
+    assert_eq!(info.target, Some("div#results"));
+    assert_eq!(
+        HxRequest::from_headers(request.headers()),
+        HxRequest::Htmx(HxRequestType::Partial)
+    );
+}
+
+#[test]
+fn info_ignores_a_non_utf8_value() {
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        HeaderName::from_static(HX_BOOSTED),
+        HeaderValue::from_bytes(&[0xff]).unwrap(),
+    );
+    headers.insert(
+        HeaderName::from_static(HX_HISTORY_RESTORE_REQUEST),
+        HeaderValue::from_static("true"),
+    );
+
+    let info = HxRequest::info(&headers);
+    assert!(!info.boosted);
+    assert!(info.history_restore_request);
+    assert_eq!(info.current_url, None);
 }

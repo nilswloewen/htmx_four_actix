@@ -1,6 +1,7 @@
 use actix_web::HttpResponse;
 use actix_web::http::header::{HeaderMap, HeaderName, HeaderValue};
-use htmx_four::SwapStyle;
+use htmx_four::{HxEvent, HxTrigger, SwapStyle};
+use serde_json::Value;
 use std::fmt;
 
 const HX_TRIGGER: HeaderName = HeaderName::from_static(htmx_four::response_headers::HX_TRIGGER);
@@ -75,7 +76,7 @@ impl<B> WithHxTriggerError<B> {
         self.error
     }
 
-    /// The response passed to [`WithHxTrigger::with_hx_trigger`], unchanged.
+    /// The response passed in, unchanged.
     pub fn into_response(self) -> HttpResponse<B> {
         self.response
     }
@@ -129,8 +130,10 @@ impl<B> WithHxTrigger<B> for HttpResponse<B> {
 /// reads every current line, joins them the same way, and writes one line back.
 ///
 /// A name list gains `, event` unless that name is already there. A JSON object gains
-/// `"event": true` unless that key is already there. Writing the object back can change key
-/// order and spacing. When the key is already present, a single existing line is left as it was.
+/// `"event": true` unless that key is already there. A rewritten JSON object keeps the existing
+/// keys in sorted order and appends the new name. When the name is already present, a single
+/// existing line is left as it was. [`append_hx_trigger_detail`] attaches a JSON detail instead
+/// of `true`, and one detail makes the whole header a JSON object.
 ///
 /// An event name is one header token: non-empty, no surrounding whitespace, no comma, and it
 /// does not start with `{`.
@@ -143,22 +146,46 @@ impl<B> WithHxTrigger<B> for HttpResponse<B> {
 /// On error the header map is unchanged.
 pub fn append_hx_trigger(headers: &mut HeaderMap, event: &str) -> Result<(), HxTriggerError> {
     validate_event_name(event)?;
+    let event =
+        HxEvent::name(event).map_err(|_| HxTriggerError::new(HxTriggerErrorKind::EventName))?;
+    append_event(headers, event)
+}
 
-    let Some(existing) = combined_existing(headers, &HX_TRIGGER)? else {
-        headers.insert(HX_TRIGGER.clone(), header_text(event)?);
-        return Ok(());
-    };
+/// Adds `event` with a JSON [`detail`](https://four.htmx.org/reference/headers/HX-Trigger#event-detail).
+///
+/// A string detail stays a JSON string. htmx exposes it as `event.detail.value`. An object is
+/// copied onto the event detail. A name list becomes one JSON object, and each bare name in that
+/// object is `true`. An existing event keeps its first detail.
+///
+/// # Errors
+///
+/// Returns the same errors as [`append_hx_trigger`]. On error the header map is unchanged.
+pub fn append_hx_trigger_detail(
+    headers: &mut HeaderMap,
+    event: &str,
+    detail: &Value,
+) -> Result<(), HxTriggerError> {
+    validate_event_name(event)?;
+    let event = HxEvent::with_detail(event, detail)
+        .map_err(|_| HxTriggerError::new(HxTriggerErrorKind::EventName))?;
+    append_event(headers, event)
+}
 
-    match merge_event(&existing.value, event)? {
-        Some(updated) => {
-            headers.insert(HX_TRIGGER.clone(), header_text(&updated)?);
-        }
-        None if existing.count > 1 => {
-            headers.insert(HX_TRIGGER.clone(), header_text(&existing.value)?);
-        }
-        None => {}
+/// Adds `event` and a JSON `detail` to [`HX-Trigger`](https://four.htmx.org/reference/headers/HX-Trigger) on `response`.
+///
+/// # Errors
+///
+/// Returns the original response inside [`WithHxTriggerError`] when [`append_hx_trigger_detail`] fails.
+#[must_use = "the updated response is returned"]
+pub fn with_hx_trigger_detail<B>(
+    mut response: HttpResponse<B>,
+    event: &str,
+    detail: &Value,
+) -> Result<HttpResponse<B>, WithHxTriggerError<B>> {
+    match append_hx_trigger_detail(response.headers_mut(), event, detail) {
+        Ok(()) => Ok(response),
+        Err(error) => Err(WithHxTriggerError { response, error }),
     }
-    Ok(())
 }
 
 /// `200 OK` with [`HX-Reswap: none`](https://four.htmx.org/reference/headers/HX-Reswap) and one [`HX-Trigger`](https://four.htmx.org/reference/headers/HX-Trigger) event.
@@ -217,38 +244,34 @@ fn combined_existing(
     Ok(Some(Existing { value, count }))
 }
 
-fn merge_event(existing: &str, event: &str) -> Result<Option<String>, HxTriggerError> {
-    if existing.starts_with('{') {
-        merge_json(existing, event)
-    } else {
-        Ok(merge_names(existing, event))
-    }
-}
-
-fn merge_names(existing: &str, event: &str) -> Option<String> {
-    let present = existing.split(',').any(|name| name.trim() == event);
-    if present {
-        None
-    } else if existing.is_empty() {
-        Some(event.to_owned())
-    } else {
-        Some(format!("{existing}, {event}"))
-    }
-}
-
-fn merge_json(existing: &str, event: &str) -> Result<Option<String>, HxTriggerError> {
-    let mut value: serde_json::Value = serde_json::from_str(existing)
-        .map_err(|_| HxTriggerError::new(HxTriggerErrorKind::Json))?;
-    let Some(object) = value.as_object_mut() else {
-        return Err(HxTriggerError::new(HxTriggerErrorKind::Json));
+fn append_event(headers: &mut HeaderMap, event: HxEvent) -> Result<(), HxTriggerError> {
+    let Some(existing) = combined_existing(headers, &HX_TRIGGER)? else {
+        write_trigger(headers, &singleton(event))?;
+        return Ok(());
     };
-    if object.contains_key(event) {
-        return Ok(None);
+
+    let mut trigger = HxTrigger::parse(&existing.value)
+        .map_err(|_| HxTriggerError::new(HxTriggerErrorKind::Json))?;
+    let added = trigger.insert(event);
+    if !added && existing.count <= 1 {
+        return Ok(());
     }
-    object.insert(event.to_owned(), serde_json::Value::Bool(true));
-    let updated =
-        serde_json::to_string(&value).map_err(|_| HxTriggerError::new(HxTriggerErrorKind::Json))?;
-    Ok(Some(updated))
+    write_trigger(headers, &trigger)
+}
+
+fn singleton(event: HxEvent) -> HxTrigger {
+    let mut trigger = HxTrigger::new();
+    let added = trigger.insert(event);
+    debug_assert!(added);
+    trigger
+}
+
+fn write_trigger(headers: &mut HeaderMap, trigger: &HxTrigger) -> Result<(), HxTriggerError> {
+    let text = trigger
+        .to_header_value()
+        .map_err(|_| HxTriggerError::new(HxTriggerErrorKind::HeaderValue))?;
+    headers.insert(HX_TRIGGER.clone(), header_text(&text)?);
+    Ok(())
 }
 
 fn header_str(value: &HeaderValue) -> Result<&str, HxTriggerError> {
