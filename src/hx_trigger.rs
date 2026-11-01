@@ -124,7 +124,7 @@ impl<B> WithHxTrigger<B> for HttpResponse<B> {
 
 /// Adds `event` to [`HX-Trigger`](https://four.htmx.org/reference/headers/HX-Trigger).
 ///
-/// htmx 4.0.0 parses a value that starts with `{` as a JSON object and any other value as a
+/// htmx 4.0.1 parses a value that starts with `{` as a JSON object and any other value as a
 /// comma-separated list of event names. The Fetch API joins repeated header lines with a comma
 /// before htmx reads them, so a JSON value plus a second line is neither form. This function
 /// reads every current line, joins them the same way, and writes one line back.

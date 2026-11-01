@@ -55,7 +55,7 @@ pub enum HxRequestType {
     Full,
     /// `HX-Request` was sent without `HX-Request-Type`.
     ///
-    /// htmx 4.0.0 sends the type header on every request. A missing type still
+    /// htmx 4.0.1 sends the type header on every request. A missing type still
     /// asks for a fragment, which is the check on the
     /// [`HX-Request`](https://four.htmx.org/reference/headers/HX-Request) page.
     Absent,
@@ -69,7 +69,7 @@ pub enum HxRequestType {
 impl HxRequest {
     /// Classifies `headers`.
     ///
-    /// `HX-Request` matches by presence. htmx 4.0.0 sends `true`, and any other
+    /// `HX-Request` matches by presence. htmx 4.0.1 sends `true`, and any other
     /// value still counts. `partial` and `full` are ASCII case-insensitive.
     /// Surrounding whitespace is not stripped.
     #[must_use]

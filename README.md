@@ -1,18 +1,18 @@
 # `htmx_four_actix`
 
-Actix Web support for [htmx 4.0.0](https://github.com/bigskysoftware/htmx/tree/v4.0.0). Handlers read [`HX-Request`](https://four.htmx.org/reference/headers/HX-Request), [`HX-Request-Type`](https://four.htmx.org/reference/headers/HX-Request-Type), and the other htmx request headers. Responses write the [htmx 4 response headers](https://four.htmx.org/reference/headers) and `Vary` in the form htmx 4 and Actix consume.
+Actix Web support for [htmx 4.0.1](https://github.com/bigskysoftware/htmx/tree/v4.0.1). Handlers read [`HX-Request`](https://four.htmx.org/reference/headers/HX-Request), [`HX-Request-Type`](https://four.htmx.org/reference/headers/HX-Request-Type), and the other htmx request headers. Responses write the [htmx 4 response headers](https://four.htmx.org/reference/headers) and `Vary` in the form htmx 4 and Actix consume.
 
 Header names and [`SwapStyle`](https://four.htmx.org/reference/attributes/hx-swap) come from [`htmx_four`](https://docs.rs/htmx_four). The names are `&str`. This crate turns them into [`actix_web::http::header::HeaderName`](https://docs.rs/actix-web/4/actix_web/http/header/struct.HeaderName.html), the `http` 0.2 type Actix Web 4 re-exports. A handler passes the `&str` straight through, as in `.insert_header((HX_REDIRECT, path))`. Where an API needs an owned `HeaderName`, use `HeaderName::from_static` on that string.
 
 ```toml
 [dependencies]
-htmx_four_actix = "0.1.2"
+htmx_four_actix = "0.1.3"
 ```
 
 This crate follows `htmx_four`: htmx 4 and newer only. The `htmx-2-compat` feature turns on the same feature there, which exports the header names htmx 4 dropped.
 
 ```toml
-htmx_four_actix = { version = "0.1.2", features = ["htmx-2-compat"] }
+htmx_four_actix = { version = "0.1.3", features = ["htmx-2-compat"] }
 ```
 
 `HxRequest` still reads [`HX-Request`](https://four.htmx.org/reference/headers/HX-Request) and [`HX-Request-Type`](https://four.htmx.org/reference/headers/HX-Request-Type). An htmx 2 request sends `HX-Request` and no `HX-Request-Type`, so it is `Htmx(Absent)` and `expects_fragment` is true. The feature does not also write `HX-Trigger-After-Swap` or `HX-Trigger-After-Settle`. htmx 2 would fire `HX-Trigger` and those headers as separate events.
@@ -73,7 +73,7 @@ fn main() -> Result<(), htmx_four_actix::WithHxTriggerError> {
 
 `append_hx_trigger` adds one event to [`HX-Trigger`](https://four.htmx.org/reference/headers/HX-Trigger).
 
-htmx 4.0.0 treats a value that starts with `{` as JSON and any other value as a comma-separated name list. The Fetch API joins duplicate header lines with a comma before htmx sees them, so a second `HX-Trigger` line breaks a JSON value. This function writes one line. A name list gains `, event`. A JSON object gains `"event": true`. A name or key that is already present is left in place.
+htmx 4.0.1 treats a value that starts with `{` as JSON and any other value as a comma-separated name list. The Fetch API joins duplicate header lines with a comma before htmx sees them, so a second `HX-Trigger` line breaks a JSON value. This function writes one line. A name list gains `, event`. A JSON object gains `"event": true`. A name or key that is already present is left in place.
 
 `append_hx_trigger_detail` attaches a JSON detail. One detail makes the whole header a JSON object. A string detail stays a string. An existing name keeps its first detail.
 
